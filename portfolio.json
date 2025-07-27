@@ -1,0 +1,14 @@
+[
+    {
+        "type": "call",
+        "strike": 185,
+        "quantity": 10,
+        "days_to_expiry": 30
+    },
+    {
+        "type": "put",
+        "strike": 175,
+        "quantity": -5,
+        "days_to_expiry": 30
+    }
+]
