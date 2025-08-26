@@ -1,51 +1,90 @@
+# options_risk_model.py
 import math
 from scipy.stats import norm
 
-def d1(S, K, T, r, sigma):
-    return (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
+class OptionsRiskModel:
+    def __init__(self, S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call"):
+        """
+        Black-Scholes option pricing model with risk metrics.
+        
+        Parameters
+        ----------
+        S : float
+            Spot price of the underlying
+        K : float
+            Strike price
+        T : float
+            Time to maturity (in years)
+        r : float
+            Risk-free interest rate
+        sigma : float
+            Volatility of the underlying
+        option_type : str
+            "call" or "put"
+        """
+        self.S = S
+        self.K = K
+        self.T = T
+        self.r = r
+        self.sigma = sigma
+        self.option_type = option_type.lower()
 
-def d2(S, K, T, r, sigma):
-    return d1(S, K, T, r, sigma) - sigma * math.sqrt(T)
+    def d1(self) -> float:
+        return (math.log(self.S / self.K) + (self.r + 0.5 * self.sigma**2) * self.T) / (
+            self.sigma * math.sqrt(self.T)
+        )
 
-def black_scholes_price(S, K, T, r, sigma, option_type="call"):
-    """Black-Scholes price for a European call or put option."""
-    D1 = d1(S, K, T, r, sigma)
-    D2 = d2(S, K, T, r, sigma)
+    def d2(self) -> float:
+        return self.d1() - self.sigma * math.sqrt(self.T)
 
-    if option_type == "call":
-        return S * norm.cdf(D1) - K * math.exp(-r * T) * norm.cdf(D2)
-    elif option_type == "put":
-        return K * math.exp(-r * T) * norm.cdf(-D2) - S * norm.cdf(-D1)
-    else:
-        raise ValueError("option_type must be 'call' or 'put'")
+    def call_price(self) -> float:
+        d1 = self.d1()
+        d2 = self.d2()
+        return self.S * norm.cdf(d1) - self.K * math.exp(-self.r * self.T) * norm.cdf(d2)
 
-def delta(S, K, T, r, sigma, option_type="call"):
-    D1 = d1(S, K, T, r, sigma)
-    if option_type == "call":
-        return norm.cdf(D1)
-    elif option_type == "put":
-        return norm.cdf(D1) - 1
+    def put_price(self) -> float:
+        d1 = self.d1()
+        d2 = self.d2()
+        return self.K * math.exp(-self.r * self.T) * norm.cdf(-d2) - self.S * norm.cdf(-d1)
 
-def gamma(S, K, T, r, sigma):
-    D1 = d1(S, K, T, r, sigma)
-    return norm.pdf(D1) / (S * sigma * math.sqrt(T))
+    def price(self) -> float:
+        if self.option_type == "call":
+            return self.call_price()
+        elif self.option_type == "put":
+            return self.put_price()
+        else:
+            raise ValueError("option_type must be 'call' or 'put'")
 
-def vega(S, K, T, r, sigma):
-    D1 = d1(S, K, T, r, sigma)
-    return S * norm.pdf(D1) * math.sqrt(T)
+    # ===== Greeks =====
+    def delta(self) -> float:
+        d1 = self.d1()
+        if self.option_type == "call":
+            return norm.cdf(d1)
+        elif self.option_type == "put":
+            return norm.cdf(d1) - 1
 
-def theta(S, K, T, r, sigma, option_type="call"):
-    D1 = d1(S, K, T, r, sigma)
-    D2 = d2(S, K, T, r, sigma)
-    first = -(S * norm.pdf(D1) * sigma) / (2 * math.sqrt(T))
-    if option_type == "call":
-        return first - r * K * math.exp(-r * T) * norm.cdf(D2)
-    elif option_type == "put":
-        return first + r * K * math.exp(-r * T) * norm.cdf(-D2)
+    def gamma(self) -> float:
+        d1 = self.d1()
+        return norm.pdf(d1) / (self.S * self.sigma * math.sqrt(self.T))
 
-def rho(S, K, T, r, sigma, option_type="call"):
-    D2 = d2(S, K, T, r, sigma)
-    if option_type == "call":
-        return K * T * math.exp(-r * T) * norm.cdf(D2)
-    elif option_type == "put":
-        return -K * T * math.exp(-r * T) * norm.cdf(-D2)
+    def vega(self) -> float:
+        d1 = self.d1()
+        return self.S * norm.pdf(d1) * math.sqrt(self.T) / 100  # scaled per 1% vol
+
+    def theta(self) -> float:
+        d1 = self.d1()
+        d2 = self.d2()
+        first = - (self.S * norm.pdf(d1) * self.sigma) / (2 * math.sqrt(self.T))
+        if self.option_type == "call":
+            second = - self.r * self.K * math.exp(-self.r * self.T) * norm.cdf(d2)
+            return (first + second) / 365  # per day
+        elif self.option_type == "put":
+            second = self.r * self.K * math.exp(-self.r * self.T) * norm.cdf(-d2)
+            return (first + second) / 365  # per day
+
+    def rho(self) -> float:
+        d2 = self.d2()
+        if self.option_type == "call":
+            return self.K * self.T * math.exp(-self.r * self.T) * norm.cdf(d2) / 100
+        elif self.option_type == "put":
+            return -self.K * self.T * math.exp(-self.r * self.T) * norm.cdf(-d2) / 100
